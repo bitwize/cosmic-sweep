@@ -16,6 +16,9 @@
 (define BULLET-SPAWN-TIME 20)
 (define BULLET-FLY-TIME 36)
 
+(define THRUST-ACCEL (cons 0 -0.05))
+(define ALIEN-VEL (cons 1. 0.))
+
 (define CELL-THROB-TIME 16)
 
 (define CELL-THROB-DIA-TABLE
@@ -75,7 +78,11 @@
 
 (define-structure
   cell
-  config throb-timer)
+  config throb-timer cluster)
+
+(define-structure
+  alien
+  config)
 
 (define init-window (c-lambda () int "init_window"))
 (define show-backbuf (c-lambda () void "show_backbuf"))
@@ -160,6 +167,9 @@
 		   (inexact->exact (round (cdr rot))))))
 	 (cdr pline))))
 
+(define (point->integer-coords pt)
+  (cons (inexact->exact (round (car pt)))
+	(inexact->exact (round (cdr pt)))))
 
 (define (ship-sprite config)
   (let* ((pos (object-config-pos config))
@@ -187,7 +197,7 @@
 	(0 . 0))
       x y)))
 
-(define (cell-sprite cell)
+(define (cell-sprites cell)
   (let* ((config (cell-config cell))
 	 (pos (object-config-pos config))
 	 (x (inexact->exact (round (car pos))))
@@ -204,26 +214,114 @@
 		     (-1.8369701987210297e-16 . -1.)
 		     (.49999999999999933 . -.866025403784439)
 		     (.8660254037844384 . -.5000000000000004)
-		     (1 . 0))))
-    (translate-pline
-     (cons 5
-	   (map
-	    (lambda (x)
-	      (cons
-	       (inexact->exact (round (*
-				       (vector-ref
-					CELL-THROB-DIA-TABLE
-					(cell-throb-timer cell))
-				       (car x))))
-	       (inexact->exact (round (*
-				       (vector-ref
-					CELL-THROB-DIA-TABLE
-					(cell-throb-timer cell))
-				       (cdr x))))))
-	    cell-pts))
-     x y)))
+		     (1 . 0)))
+	 (cell-sp
+	  (map
+	   (lambda (x)
+	     (cons
+	      (inexact->exact (round (*
+				      (vector-ref
+				       CELL-THROB-DIA-TABLE
+				       (cell-throb-timer cell))
+				      (car x))))
+	      (inexact->exact (round (*
+				      (vector-ref
+				       CELL-THROB-DIA-TABLE
+				       (cell-throb-timer cell))
+				      (cdr x))))))
+	   cell-pts))
+	 (clus (cell-cluster cell)))
+    (cond
+     ((= clus 1)
+      (list
+       (translate-pline
+	(cons 5 cell-sp)
+	x y)))
+     ((= clus 2)
+      (list
+       (translate-pline
+	(cons 3 cell-sp)
+	x y)
+       (translate-pline
+	(cons 3 cell-sp)
+	(- x 10)
+	y)))
+     ((= clus 3)
+      (list
+       (translate-pline
+	(cons 6 cell-sp)
+	x y)
+       (translate-pline
+	(cons 6 cell-sp)
+	(- x 10)
+	y)
+       (translate-pline
+	(cons 6 cell-sp)
+	(- x 5)
+	(inexact->exact (round (- y (* 5 (sqrt 0.5))))))))
+     (else '()))))
 
-;; The display function composes a display list from the current game
+(define (alien-sprite alien)
+  (let* ((alien-pts '((10. . 0)
+		      (8.660254037844387 . 6.499999999999999)
+		      (5.000000000000001 . 11.2583302491977)
+		      (6.123233995736766e-16 . 13.)
+		      (-4.999999999999998 . 11.258330249197703)
+		      (-8.660254037844385 . 6.500000000000005)
+		      (-10. . 1.5920408388915593e-15)
+		      (-8.660254037844388 . -6.499999999999997)
+		      (-5.000000000000004 . -11.258330249197699)
+		      (-1.8369701987210297e-15 . -13.)
+		      (4.9999999999999933 . -11.258330249197708)
+		      (8.660254037844384 . -6.500000000000006)
+		      (10. . 0)))
+	 (alien-eye-pts '((4 . 0)
+			  (3.464101615137755 . 1.9999999999999998)
+			  (2.0000000000000004 . 3.4641016151377544)
+			  (2.4492935982947064e-16 . 4.)
+			  (-1.9999999999999991 . 3.464101615137755)
+			  (-3.464101615137754 . 2.0000000000000013)
+			  (-4. . 4.898587196589413e-16)
+			  (-3.4641016151377553 . -1.999999999999999)
+			  (-2.0000000000000018 . -3.4641016151377535)
+			  (-7.347880794884119e-16 . -4.)
+			  (1.9999999999999973 . -3.464101615137756)
+			  (3.4641016151377535 . -2.0000000000000018)
+			  (4 . 0)))
+	 (alien-antenna1-pts '((5 . -11)
+			       (3 . -14)
+			       (3 . -16)
+			       (6 . -20)))
+	 (alien-antenna2-pts '((5 . 11)
+			       (3 . 14)
+			       (3 . 16)
+			       (6 . 20)))
+	 (config (alien-config alien))
+	 (pos (object-config-pos config))
+	 (x (inexact->exact (round (car pos))))
+	 (y (inexact->exact (round (cdr pos))))
+	 (angle (object-config-angle config)))
+    (list
+     (translate-pline
+      (rotate-pline
+       (cons 1 alien-pts)
+       angle)
+      x y)
+     (translate-pline
+      (cons 1 (map point->integer-coords alien-eye-pts))
+      x y)
+     (translate-pline
+      (rotate-pline
+       (cons 1 alien-antenna1-pts)
+       angle)
+      x y)
+     (translate-pline
+      (rotate-pline
+       (cons 1 alien-antenna2-pts)
+       angle)
+      x y))))
+
+     ;; The display function composes a display list from the current game
 ;; state which is then fed to the /display backend/. The backend is
 ;; mostly written in C and handles the setup, teardown, draw calls,
 ;; and event handling with X11. Because this is a vector game, each
@@ -254,20 +352,33 @@
 	       (loop (+ i 1)
 		     (if (not (vector-ref cells i))
 			 dl
-			 (cons (cell-sprite
-				(vector-ref cells i))
-			       dl))))))))
+			 (append (cell-sprites
+				  (vector-ref cells i))
+				 dl))))))))
+  (define (get-alien-sprites aliens)
+    (let* ((l (vector-length aliens)))
+      (let loop ((i 0)
+		 (dl '()))
+	(cond ((>= i l) dl)
+	      (else
+	       (loop (+ i 1)
+		     (if (not (vector-ref aliens i))
+			 dl
+			 (append (alien-sprite
+				  (vector-ref aliens i))
+				 dl))))))))
   
   (append
    (list
     (ship-sprite (ship-config (game-state-ship state))))
    (get-cell-sprites (game-state-cells state))
-   (get-bullet-sprites (game-state-bullets state))))
+   (get-bullet-sprites (game-state-bullets state))
+   (get-alien-sprites (game-state-aliens state))))
 
 (define (key-pressed? keys key)
   (not (zero? (bitwise-and keys key))))
 
-(define THRUST-ACCEL (cons 0 -0.05))
+;; Wrap a point's coordinates to be within the bounds of the window.
 
 (define (wrap-point! pt)
   (let loop ()
@@ -287,6 +398,27 @@
 	(begin (set-cdr! pt (+ (cdr pt) WINDOW-HEIGHT))
 	       (loop)))))
 
+;; Simple collision function. Determines if pt1 collides with pt2, to
+;; a certain tolerance. Uses simple AABB around pt2.
+
+(define (collide? pt1 pt2 tolerance)
+  (let* ((x1 (car pt1)) (y1 (cdr pt1))
+	 (x2 (car pt2)) (y2 (cdr pt2)))
+    (and
+     (>= x1 (- x2 tolerance))
+     (< x1 (+ x2 tolerance))
+     (>= y1 (- y2 tolerance))
+     (< y1 (+ y2 tolerance)))))
+
+
+(define (vector-for-each/index f v)
+  (let* ((l (vector-length v)))
+    (do ((i 0 (+ i 1)))
+	((>= i l))
+      (f i (vector-ref v i)))))
+	
+;; Update the game state. Very imperative and mutates the state.
+
 (define (update-game! state)
   (let* ((ship (game-state-ship state))
 	 (shipc (ship-config ship))
@@ -297,43 +429,110 @@
 	 (angle (object-config-angle shipc))
 	 (bullets (game-state-bullets state))
 	 (cells (game-state-cells state))
+	 (aliens (game-state-aliens state))
 	 (keys (poll-keys)))
     ;; move ship
     
     (translate-point! pos vel)
 
     ;; move bullets, update bullet counters
-    (do ((i 0 (+ i 1)))
-	((>= i (vector-length bullets)))
-      (let* ((b (vector-ref bullets i)))
-	(if b
-	    (let* 
-		((conf (bullet-config b)))
-	      (translate-point!
-	       (object-config-pos conf)
-	       (object-config-vel conf))
-	      (wrap-point! (object-config-pos conf))
-	      (bullet-fly-timer-set! b (+ (bullet-fly-timer b) 1))
-	      (if (>= (bullet-fly-timer b) BULLET-FLY-TIME)
-		  (vector-set! bullets i #f))))))
-    (do ((i 0 (+ i 1)))
-	((>= i (vector-length cells)))
-      (let* ((c (vector-ref cells i)))
-	(if c
-	    (let* 
-		((conf (cell-config c)))
-	      (translate-point!
-	       (object-config-pos conf)
-	       (object-config-vel conf))
-	      (translate-point!
-	       (object-config-pos conf)
-	       (cons
-		(- (random-integer 3) 1)
-		(- (random-integer 3) 1)))
-	      (wrap-point! (object-config-pos conf))
-	      (cell-throb-timer-set! c (+ (cell-throb-timer c) 1))
-	      (if (>= (cell-throb-timer c) CELL-THROB-TIME)
-		  (cell-throb-timer-set! c 0))))))
+    (vector-for-each/index
+     (lambda (i b)
+       (if b
+	   (let* 
+	       ((conf (bullet-config b)))
+	     (translate-point!
+	      (object-config-pos conf)
+	      (object-config-vel conf))
+	     (wrap-point! (object-config-pos conf))
+	     (bullet-fly-timer-set! b (+ (bullet-fly-timer b) 1))
+	     (if (>= (bullet-fly-timer b) BULLET-FLY-TIME)
+		 (vector-set! bullets i #f)))))
+     bullets)
+    ;; move and animate "cells"
+
+    ;; Cells have an associated "cell throb timer" that is initialized
+    ;; randomly and loops from 0-15, incrementing each frame, that
+    ;; controls the "throbbing" animation of the cells. A bit of
+    ;; Brownian motion is also applied to each cell so they wiggle
+    ;; about.
+
+    (vector-for-each/index
+     (lambda (i c)
+       (if c
+	   (let* 
+	       ((conf (cell-config c))
+		(brownian-displacement (lambda () (* 0.25 (- (random-integer 3) 1)))))
+	     (translate-point!
+	      (object-config-pos conf)
+	      (object-config-vel conf))
+	     (translate-point!
+	      (object-config-pos conf)
+	      (cons
+	       (brownian-displacement)
+	       (brownian-displacement)))
+	     (wrap-point! (object-config-pos conf))
+	     (cell-throb-timer-set! c (+ (cell-throb-timer c) 1))
+	     (if (>= (cell-throb-timer c) CELL-THROB-TIME)
+		 (cell-throb-timer-set! c 0))
+	     ;; Check for collision between cell and a bullet. Delete
+	     ;; both if collision found.
+	     (vector-for-each/index
+	      (lambda (j b)
+		 (if b
+		     (let* ((b-pos (object-config-pos (bullet-config b))))
+		       (if (collide? b-pos (object-config-pos conf) 10.0)
+			   (begin
+			     (if (>
+				  (cell-cluster c)
+				  1)
+				 (cell-cluster-set! c (- (cell-cluster c) 1))
+				 (vector-set! cells i #f))
+			     (vector-set! bullets j #f))))))
+	      bullets)
+	     ;; Check for cell-cell collision. Make cells stick together.
+	     (vector-for-each/index
+	      (lambda (j c2)
+		(if (and c2 (not (= j i)))
+		    (let* ((c-pos (object-config-pos conf))
+			   (c2-pos (object-config-pos (cell-config c2))))
+		      (if (collide? c2-pos c-pos 15.0)
+			  (begin
+			    (cell-cluster-set!
+			     c
+			     (+ (cell-cluster c)
+				(cell-cluster c2)))
+			    (if (> (cell-cluster c) 3)
+				(begin
+				  (vector-set! cells i #f)
+				  (vector-set! aliens i
+					       (make-alien
+						(cell-config c)))))
+			    (vector-set! cells j #f)))
+		      (if (collide? c2-pos c-pos 150.0)
+			  (begin
+			    (let* ((roll (random-integer 150)))
+			      (if (< roll (cell-cluster c2))
+				  (let* ((dx (- (car c2-pos) (car c-pos)))
+					 (dy (- (cdr c2-pos) (cdr c-pos)))
+					 (dist (sqrt (+ (* dx dx) (* dy dy)))))
+				    (if (> dist 0)
+					(translate-point! c-pos (cons (/ dx dist)  (/ dy dist))))))))))))
+	      cells))))
+     cells)
+    (vector-for-each/index
+     (lambda (i a)
+       (if a
+	   (let* ((conf (alien-config a))
+		  (apos (object-config-pos conf)))
+	     (translate-point! apos (object-config-vel conf))
+	     (object-config-vel-set! conf
+				     (rotate-point ALIEN-VEL (object-config-angle conf)))
+	     (object-config-angle-set! conf
+				       (atan (- (cdr pos) (cdr apos))
+					     (- (car pos) (car apos))))
+	     (wrap-point! apos))))
+     aliens)
     (wrap-point! pos)
     (if (key-pressed? keys CS-KEY-FIRE)
 	(begin
@@ -383,7 +582,8 @@
 		      (random-integer WINDOW-HEIGHT))
 		     (cons 0 0)
 		     0)
-		    (random-integer CELL-THROB-TIME))))
+		    (random-integer CELL-THROB-TIME)
+		    1)))
     v))
 
 (define (main)
@@ -393,7 +593,7 @@
 		       (make-object-config (cons 360 270) (cons 0 0) 0)
 		       0 0)
 		      (make-vector 5 #f)
-		      (make-cells 50) #f 0 0 )))
+		      (make-cells 50) (make-vector 50 #f) 0 0)))
     (let loop ((t1 (time->seconds (current-time)))
 	       (t2 (time->seconds (current-time))))
       (let loop ((tdiff2 (+ tdiff (- t2 t1))))
