@@ -5,7 +5,7 @@
 
 This is Cosmic Sweep, a "Lisp game jam fail". Due to personal-life
 issues I could not get it submitted into the 2024 Spring Lisp Game
-Jam. Nevertheless, I decided to finish it.
+Jam. Nevertheless, I decided to finish it. It's still a work in progress.
 
 * Game Concept
 
