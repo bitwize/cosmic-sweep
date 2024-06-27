@@ -416,7 +416,16 @@
     (do ((i 0 (+ i 1)))
 	((>= i l))
       (f i (vector-ref v i)))))
-	
+
+(define (bullet-check proc bullets conf tolerance)
+  (vector-for-each/index
+   (lambda (j b)
+     (if b
+	 (let* ((b-pos (object-config-pos (bullet-config b))))
+	   (if (collide? b-pos (object-config-pos conf) tolerance)
+	       (proc j b)))))
+   bullets))
+
 ;; Update the game state. Very imperative and mutates the state.
 
 (define (update-game! state)
@@ -477,19 +486,17 @@
 		 (cell-throb-timer-set! c 0))
 	     ;; Check for collision between cell and a bullet. Delete
 	     ;; both if collision found.
-	     (vector-for-each/index
+	     (bullet-check
 	      (lambda (j b)
-		 (if b
-		     (let* ((b-pos (object-config-pos (bullet-config b))))
-		       (if (collide? b-pos (object-config-pos conf) 10.0)
-			   (begin
-			     (if (>
-				  (cell-cluster c)
-				  1)
-				 (cell-cluster-set! c (- (cell-cluster c) 1))
-				 (vector-set! cells i #f))
-			     (vector-set! bullets j #f))))))
-	      bullets)
+		(if (>
+		     (cell-cluster c)
+		     1)
+		    (cell-cluster-set! c (- (cell-cluster c) 1))
+		    (vector-set! cells i #f))
+		(vector-set! bullets j #f))
+	      bullets
+	      (cell-config c)
+	      10.0)
 	     ;; Check for cell-cell collision. Make cells stick together.
 	     (vector-for-each/index
 	      (lambda (j c2)
@@ -525,6 +532,13 @@
        (if a
 	   (let* ((conf (alien-config a))
 		  (apos (object-config-pos conf)))
+	     (bullet-check
+	      (lambda (j b)
+		(vector-set! aliens i #f)
+		(vector-set! bullets j #f))
+	      bullets
+	      conf
+	      15.0)
 	     (translate-point! apos (object-config-vel conf))
 	     (object-config-vel-set! conf
 				     (rotate-point ALIEN-VEL (object-config-angle conf)))

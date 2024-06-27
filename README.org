@@ -1,0 +1,64 @@
+#+TITLE: Cosmic Sweep
+#+DATE: <2024-06-26 Wed>
+
+* Intro
+
+This is Cosmic Sweep, a "Lisp game jam fail". Due to personal-life
+issues I could not get it submitted into the 2024 Spring Lisp Game
+Jam. Nevertheless, I decided to finish it.
+
+* Game Concept
+
+Cosmic Sweep is inspired by two games: Atari's arcade game
+_Asteroids_, and _The Attack_ for TI-99/4A. You control a spaceship
+patrolling a sector of space that is swarming with alien cells. Cells
+are harmless on their own, but have a tendency to seek each other out
+and cluster together. When a cluster of four or more cells is formed,
+they form an aggressive alien that will chase you and destroy you if
+it collides with you.
+
+* How to Build
+
+Cosmic Sweep requires [[https://gambitscheme.org][Gambit]] v4.9.5 or later. Make sure Gambit is
+compiled and installed, perhaps through your operating system's
+package manager. X11 and Xlib libraries and headers are also a
+prerequisite.
+
+Make sure the Gambit interpreter and compiler are in your ~PATH~, and
+then say:
+
+: make cosmic-sweep.o1
+
+Then, run the Gambit interpreter and tell it:
+
+: (load "cosmic-sweep.o1")
+: (init-window)
+: (main)
+
+There's a make target to build an executable (~make cosmic-sweep~) but
+it is not yet working.
+
+* How To Play
+
+Left and right arrow keys turn the ship, up arrow thrusts, space
+fires. Asteroids-like thrust and inertial mechanics are implemented;
+once you start going in a certain direction, you will keep moving at
+that velocity.
+
+* Design Notes
+
+Probably the most interesting thing about this game is its display
+system. I found a way of getting it to draw to the screen with X11
+without using foreign objects. Developing a full, or even a partial,
+FFI for X was out of scope for a game-jam game, so I rigged up
+something simpler. Because it's a vector game like Asteroids,
+everything drawn to the screen consists of polylines drawn in one of
+eight colors. By writing a small C routine that accepts a color and a
+buffer with the polyline vertices in it as ~uint32_t~ values, I can
+pass in a ~u32vector~ full of vertex data from from Scheme. At a
+higher level, to render the screen each frame, the game transforms the
+current state into a /display list/ of polylines to draw with their
+color; and the main rendering function calls into the C backend to
+draw them one by one. The entire C backend is in
+~cosmic-sweep-backend.c~ and contains various other functions for
+things like clearing the screen and getting the keyboard state.
