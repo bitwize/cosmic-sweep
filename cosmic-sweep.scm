@@ -40,6 +40,63 @@
    5.732233047033631
    6.543291419087274))
 
+(define SCORE-POS (cons 700 25))
+
+(define SCORE-DIGIT-WIDTH 15)
+
+(define DIGITS
+  (vector
+   '(((0 . 0)
+      (10 . 0)
+      (10 . -20)
+      (0 . -20)
+      (0 . 0)))
+   '(((10 . 0)
+      (10 . -20)))
+   '(((10 . 0)
+      (0 . 0)
+      (0 . -10)
+      (10 . -10)
+      (10 . -20)
+      (0 . -20)))
+   '(((0 . 0)
+      (10 . 0)
+      (10 . -20)
+      (0 . -20))
+     ((0 . -10)
+      (10 . -10)))
+   '(((0 . -20)
+      (0 . -10)
+      (10 . -10))
+     ((10 . -20)
+      (10 . 0)))
+   '(((0 . 0)
+      (10 . 0)
+      (10 . -10)
+      (0 . -10)
+      (0 . -20)
+      (10 . -20)))
+   '(((0 . -20)
+      (0 . 0)
+      (10 . 0)
+      (10 . -10)
+      (0 . -10)))
+   '(((0 . -20)
+      (10 . -20)
+      (10 . 0)))
+   '(((0 . 0)
+      (10 . 0)
+      (10 . -20)
+      (0 . -20)
+      (0 . 0))
+     ((0 . -10)
+      (10 . -10)))
+   '(((10 . 0)
+      (10 . -20)
+      (0 . -20)
+      (0 . -10)
+      (10 . -10)))))
+
 ;; Things we need to track:
 ;;   * player's ship
 ;;     + position
@@ -135,13 +192,16 @@
   (cons (+ (car pt1) (car pt2))
 	(+ (cdr pt1) (cdr pt2))))
 
-(define (translate-pline pline x y)
+(define (translate-pline* pline x y)
   (cons (car pline)
 	(map
 	 (lambda (coords)
 	   (cons (+ x (car coords))
 		 (+ y (cdr coords))))
 	 (cdr pline))))
+
+(define (translate-pline pline point)
+  (translate-pline* pline (car point) (cdr point)))
 
 (define (rotate-point coords angle)
   (let ((x (car coords)) (y (cdr coords)))
@@ -176,7 +236,7 @@
 	 (x (inexact->exact (round (car pos))))
 	 (y (inexact->exact (round (cdr pos))))
 	 (angle (object-config-angle config)))
-    (translate-pline
+    (translate-pline*
      (rotate-pline
       `(4
 	(0 . -10)
@@ -191,7 +251,7 @@
   (let* ((pos (object-config-pos config))
 	 (x (inexact->exact (round (car pos))))
 	 (y (inexact->exact (round (cdr pos)))))
-    (translate-pline
+    (translate-pline*
       `(7
 	(0 . 0)
 	(0 . 0))
@@ -234,28 +294,28 @@
     (cond
      ((= clus 1)
       (list
-       (translate-pline
+       (translate-pline*
 	(cons 5 cell-sp)
 	x y)))
      ((= clus 2)
       (list
-       (translate-pline
+       (translate-pline*
 	(cons 3 cell-sp)
 	x y)
-       (translate-pline
+       (translate-pline*
 	(cons 3 cell-sp)
 	(- x 10)
 	y)))
      ((= clus 3)
       (list
-       (translate-pline
+       (translate-pline*
 	(cons 6 cell-sp)
 	x y)
-       (translate-pline
+       (translate-pline*
 	(cons 6 cell-sp)
 	(- x 10)
 	y)
-       (translate-pline
+       (translate-pline*
 	(cons 6 cell-sp)
 	(- x 5)
 	(inexact->exact (round (- y (* 5 (sqrt 0.5))))))))
@@ -302,26 +362,54 @@
 	 (y (inexact->exact (round (cdr pos))))
 	 (angle (object-config-angle config)))
     (list
-     (translate-pline
+     (translate-pline*
       (rotate-pline
        (cons 1 alien-pts)
        angle)
       x y)
-     (translate-pline
+     (translate-pline*
       (cons 1 (map point->integer-coords alien-eye-pts))
       x y)
-     (translate-pline
+     (translate-pline*
       (rotate-pline
        (cons 1 alien-antenna1-pts)
        angle)
       x y)
-     (translate-pline
+     (translate-pline*
       (rotate-pline
        (cons 1 alien-antenna2-pts)
        angle)
       x y))))
 
-     ;; The display function composes a display list from the current game
+(define (score-sprite score)
+  (define (score-sprite1 score accum point)
+    (cond
+     ((zero? score)
+      (if (null? accum)
+	  (map
+	   (lambda (x)
+	     (translate-pline
+	      (cons 7 x)
+	      point))
+	   (vector-ref DIGITS 0))
+	  accum))
+     (else
+      (let* ((digit (abs (remainder score 10))))
+	(score-sprite1
+	 (quotient score 10)
+	 (append
+	  (map
+	   (lambda (x)
+	     (translate-pline
+	      (cons 7 x)
+	      point))
+	   (vector-ref DIGITS digit))
+	  accum)
+	 (cons (- (car point) SCORE-DIGIT-WIDTH) (cdr point)))))))
+  (score-sprite1 score '() SCORE-POS))
+	
+
+;; The display function composes a display list from the current game
 ;; state which is then fed to the /display backend/. The backend is
 ;; mostly written in C and handles the setup, teardown, draw calls,
 ;; and event handling with X11. Because this is a vector game, each
@@ -373,7 +461,8 @@
     (ship-sprite (ship-config (game-state-ship state))))
    (get-cell-sprites (game-state-cells state))
    (get-bullet-sprites (game-state-bullets state))
-   (get-alien-sprites (game-state-aliens state))))
+   (get-alien-sprites (game-state-aliens state))
+   (score-sprite (game-state-score state))))
 
 (define (key-pressed? keys key)
   (not (zero? (bitwise-and keys key))))
@@ -493,7 +582,11 @@
 		     1)
 		    (cell-cluster-set! c (- (cell-cluster c) 1))
 		    (vector-set! cells i #f))
-		(vector-set! bullets j #f))
+		(vector-set! bullets j #f)
+		(game-state-score-set! state
+				       (+
+					(game-state-score state)
+					50)))
 	      bullets
 	      (cell-config c)
 	      10.0)
@@ -535,7 +628,11 @@
 	     (bullet-check
 	      (lambda (j b)
 		(vector-set! aliens i #f)
-		(vector-set! bullets j #f))
+		(vector-set! bullets j #f)
+		(game-state-score-set! state
+				       (+
+					(game-state-score state)
+					200)))
 	      bullets
 	      conf
 	      15.0)
