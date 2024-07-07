@@ -21,6 +21,8 @@
 
 (define CELL-THROB-TIME 16)
 
+(define INVINC-TIME 100)
+
 (define CELL-THROB-DIA-TABLE
   (vector
    7.5
@@ -39,6 +41,66 @@
    5.190301168721783
    5.732233047033631
    6.543291419087274))
+
+(define SHIP-SHAPE
+  	   '(4
+	     (0 . -10)
+	     (-5 . 10)
+	     (0 . 8)
+	     (5 . 10)
+	     (0 . -10)))
+
+(define CELL-SHAPE '((1 . 0)
+		     (.8660254037844387 . .49999999999999994)
+		     (.5000000000000001 . .8660254037844386)
+		     (6.123233995736766e-17 . 1.)
+		     (-.4999999999999998 . .8660254037844387)
+		     (-.8660254037844385 . .5000000000000003)
+		     (-1. . 1.2246467991473532e-16)
+		     (-.8660254037844388 . -.4999999999999997)
+		     (-.5000000000000004 . -.8660254037844384)
+		     (-1.8369701987210297e-16 . -1.)
+		     (.49999999999999933 . -.866025403784439)
+		     (.8660254037844384 . -.5000000000000004)
+		     (1 . 0)))
+
+(define ALIEN-SHAPE '((10. . 0)
+		      (8.660254037844387 . 6.499999999999999)
+		      (5.000000000000001 . 11.2583302491977)
+		      (6.123233995736766e-16 . 13.)
+		      (-4.999999999999998 . 11.258330249197703)
+		      (-8.660254037844385 . 6.500000000000005)
+		      (-10. . 1.5920408388915593e-15)
+		      (-8.660254037844388 . -6.499999999999997)
+		      (-5.000000000000004 . -11.258330249197699)
+		      (-1.8369701987210297e-15 . -13.)
+		      (4.9999999999999933 . -11.258330249197708)
+		      (8.660254037844384 . -6.500000000000006)
+		      (10. . 0)))
+
+(define ALIEN-EYE-SHAPE '((4 . 0)
+			  (3.464101615137755 . 1.9999999999999998)
+			  (2.0000000000000004 . 3.4641016151377544)
+			  (2.4492935982947064e-16 . 4.)
+			  (-1.9999999999999991 . 3.464101615137755)
+			  (-3.464101615137754 . 2.0000000000000013)
+			  (-4. . 4.898587196589413e-16)
+			  (-3.4641016151377553 . -1.999999999999999)
+			  (-2.0000000000000018 . -3.4641016151377535)
+			  (-7.347880794884119e-16 . -4.)
+			  (1.9999999999999973 . -3.464101615137756)
+			  (3.4641016151377535 . -2.0000000000000018)
+			  (4 . 0)))
+
+(define ALIEN-ANTENNA1-SHAPE '((5 . -11)
+			       (3 . -14)
+			       (3 . -16)
+			       (6 . -20)))
+
+(define ALIEN-ANTENNA2-SHAPE '((5 . 11)
+			       (3 . 14)
+			       (3 . 16)
+			       (6 . 20)))
 
 (define SCORE-POS (cons 700 25))
 
@@ -114,7 +176,7 @@
 ;;   * aliens (if any)
 ;;     + position
 ;;     + velocity
-;;   * # of lives
+;;   * whether we're dead or not
 ;;   * score
 
 (define-structure
@@ -123,11 +185,11 @@
 
 (define-structure
   game-state
-  ship bullets cells aliens lives score)
+  ship bullets cells aliens score)
 
 (define-structure
   ship
-  config shoot-timer current-bullet)
+  config shoot-timer current-bullet dead? invinc-timer)
 
 (define-structure
   bullet
@@ -209,14 +271,21 @@
      (- (* x (cos angle)) (* y (sin angle)))
      (+ (* x (sin angle)) (* y (cos angle))))))
 
+(define (number->integer x)
+  (inexact->exact (round x)))
+
 (define (rotate-point! coords angle)
   (let ((x (car coords)) (y (cdr coords)))
     (set-car!
      coords
-     (inexact->exact (round (- (* x (cos angle)) (* y (sin angle))))))
+     (number->integer (- (* x (cos angle)) (* y (sin angle)))))
     (set-cdr!
      coords
-     (inexact->exact (round (+ (* x (sin angle)) (* y (cos angle))))))))
+     (number->integer (+ (* x (sin angle)) (* y (cos angle)))))))
+
+(define (scale-point coords factor)
+  (cons (* (car coords) factor)
+	(* (cdr coords) factor)))
 
 (define (rotate-pline pline angle)
   (cons (car pline)
@@ -231,21 +300,33 @@
   (cons (inexact->exact (round (car pt)))
 	(inexact->exact (round (cdr pt)))))
 
-(define (ship-sprite config)
-  (let* ((pos (object-config-pos config))
-	 (x (inexact->exact (round (car pos))))
-	 (y (inexact->exact (round (cdr pos))))
+(define (ship-sprite ship)
+  (let* ((config (ship-config ship))
+	 (pos (point->integer-coords (object-config-pos config)))
+	 (x (car pos))
+	 (y (cdr pos))
 	 (angle (object-config-angle config)))
-    (translate-pline*
-     (rotate-pline
-      `(4
-	(0 . -10)
-	(-5 . 10)
-	(0 . 8)
-	(5 . 10)
-	(0 . -10))
-      angle)
-     x y)))
+    (if (ship-dead? ship)
+	'()
+	(cons
+	 (translate-pline*
+	  (rotate-pline
+	   SHIP-SHAPE
+	   angle)
+	  x y)
+	 (if (> (ship-invinc-timer ship) 0)
+	     (cons
+	      (translate-pline*
+	       (cons
+		7
+		(map
+		 (lambda (x)
+		   (point->integer-coords
+		    (scale-point x 20.)))
+		 CELL-SHAPE))
+	       x y)
+	      '())
+	     '())))))
 
 (define (bullet-sprite config)
   (let* ((pos (object-config-pos config))
@@ -262,33 +343,15 @@
 	 (pos (object-config-pos config))
 	 (x (inexact->exact (round (car pos))))
 	 (y (inexact->exact (round (cdr pos))))
-	 (cell-pts '((1 . 0)
-		     (.8660254037844387 . .49999999999999994)
-		     (.5000000000000001 . .8660254037844386)
-		     (6.123233995736766e-17 . 1.)
-		     (-.4999999999999998 . .8660254037844387)
-		     (-.8660254037844385 . .5000000000000003)
-		     (-1. . 1.2246467991473532e-16)
-		     (-.8660254037844388 . -.4999999999999997)
-		     (-.5000000000000004 . -.8660254037844384)
-		     (-1.8369701987210297e-16 . -1.)
-		     (.49999999999999933 . -.866025403784439)
-		     (.8660254037844384 . -.5000000000000004)
-		     (1 . 0)))
+	 (cell-pts CELL-SHAPE)
 	 (cell-sp
 	  (map
 	   (lambda (x)
-	     (cons
-	      (inexact->exact (round (*
-				      (vector-ref
-				       CELL-THROB-DIA-TABLE
-				       (cell-throb-timer cell))
-				      (car x))))
-	      (inexact->exact (round (*
-				      (vector-ref
-				       CELL-THROB-DIA-TABLE
-				       (cell-throb-timer cell))
-				      (cdr x))))))
+	     (point->integer-coords
+	      (scale-point x
+			   (vector-ref
+			    CELL-THROB-DIA-TABLE
+			    (cell-throb-timer cell)))))
 	   cell-pts))
 	 (clus (cell-cluster cell)))
     (cond
@@ -322,40 +385,10 @@
      (else '()))))
 
 (define (alien-sprite alien)
-  (let* ((alien-pts '((10. . 0)
-		      (8.660254037844387 . 6.499999999999999)
-		      (5.000000000000001 . 11.2583302491977)
-		      (6.123233995736766e-16 . 13.)
-		      (-4.999999999999998 . 11.258330249197703)
-		      (-8.660254037844385 . 6.500000000000005)
-		      (-10. . 1.5920408388915593e-15)
-		      (-8.660254037844388 . -6.499999999999997)
-		      (-5.000000000000004 . -11.258330249197699)
-		      (-1.8369701987210297e-15 . -13.)
-		      (4.9999999999999933 . -11.258330249197708)
-		      (8.660254037844384 . -6.500000000000006)
-		      (10. . 0)))
-	 (alien-eye-pts '((4 . 0)
-			  (3.464101615137755 . 1.9999999999999998)
-			  (2.0000000000000004 . 3.4641016151377544)
-			  (2.4492935982947064e-16 . 4.)
-			  (-1.9999999999999991 . 3.464101615137755)
-			  (-3.464101615137754 . 2.0000000000000013)
-			  (-4. . 4.898587196589413e-16)
-			  (-3.4641016151377553 . -1.999999999999999)
-			  (-2.0000000000000018 . -3.4641016151377535)
-			  (-7.347880794884119e-16 . -4.)
-			  (1.9999999999999973 . -3.464101615137756)
-			  (3.4641016151377535 . -2.0000000000000018)
-			  (4 . 0)))
-	 (alien-antenna1-pts '((5 . -11)
-			       (3 . -14)
-			       (3 . -16)
-			       (6 . -20)))
-	 (alien-antenna2-pts '((5 . 11)
-			       (3 . 14)
-			       (3 . 16)
-			       (6 . 20)))
+  (let* ((alien-pts ALIEN-SHAPE)
+	 (alien-eye-pts ALIEN-EYE-SHAPE)
+	 (alien-antenna1-pts ALIEN-ANTENNA1-SHAPE)
+	 (alien-antenna2-pts ALIEN-ANTENNA2-SHAPE)
 	 (config (alien-config alien))
 	 (pos (object-config-pos config))
 	 (x (inexact->exact (round (car pos))))
@@ -457,8 +490,7 @@
 				 dl))))))))
   
   (append
-   (list
-    (ship-sprite (ship-config (game-state-ship state))))
+   (ship-sprite (game-state-ship state))
    (get-cell-sprites (game-state-cells state))
    (get-bullet-sprites (game-state-bullets state))
    (get-alien-sprites (game-state-aliens state))
@@ -529,10 +561,6 @@
 	 (cells (game-state-cells state))
 	 (aliens (game-state-aliens state))
 	 (keys (poll-keys)))
-    ;; move ship
-    
-    (translate-point! pos vel)
-
     ;; move bullets, update bullet counters
     (vector-for-each/index
      (lambda (i b)
@@ -636,6 +664,10 @@
 	      bullets
 	      conf
 	      15.0)
+	     (if (and
+		  (not (ship-dead? ship))
+		  (collide? pos apos 10.0))
+		 (ship-dead?-set! ship #t))
 	     (translate-point! apos (object-config-vel conf))
 	     (object-config-vel-set! conf
 				     (rotate-point ALIEN-VEL (object-config-angle conf)))
@@ -644,40 +676,49 @@
 					     (- (car pos) (car apos))))
 	     (wrap-point! apos))))
      aliens)
-    (wrap-point! pos)
-    (if (key-pressed? keys CS-KEY-FIRE)
+    (if (not (ship-dead? ship))
 	(begin
-	  (if (zero? (ship-shoot-timer ship))
-	      (let* ((b (vector-ref bullets (ship-current-bullet ship))))
-		(if (not b)
-		    (begin
-		      (vector-set!
-		       bullets
-		       (ship-current-bullet ship)
-		       (make-bullet
-			(let* ((bullet-ang (- angle 1.570796)))
-			  (make-object-config
-			   (cons (car pos) (cdr pos))
-			   (cons (* BULLET-VEL (cos bullet-ang))
-				 (* BULLET-VEL (sin bullet-ang)))
-			   angle))
-			(ship-current-bullet ship)
-			0))
-		      (ship-current-bullet-set!
-		       ship
-		       (remainder
-			(+ (ship-current-bullet ship) 1)
-			(vector-length bullets)))))))
-	  (ship-shoot-timer-set! ship (remainder
-				       (+ (ship-shoot-timer ship) 1)
-				       BULLET-SPAWN-TIME)))
-	(ship-shoot-timer-set! ship 0))
-    (if (key-pressed? keys CS-KEY-THRUST)
-	(translate-point! vel (rotate-point THRUST-ACCEL angle)))
-    (if (key-pressed? keys 1)
-	(object-config-angle-set! shipc (- angle 0.05))
-	(if (key-pressed? keys 2)
-	    (object-config-angle-set! shipc (+ angle 0.05))))))
+	  ;; move ship
+    
+	  (translate-point! pos vel)
+	  (wrap-point! pos)
+	  (if (> (ship-invinc-timer ship) 0)
+	      (ship-invinc-timer-set! ship (- (ship-invinc-timer ship) 1)))
+	  
+	  ;; handle key events
+	  (if (key-pressed? keys CS-KEY-FIRE)
+	      (begin
+		(if (zero? (ship-shoot-timer ship))
+		    (let* ((b (vector-ref bullets (ship-current-bullet ship))))
+		      (if (not b)
+			  (begin
+			    (vector-set!
+			     bullets
+			     (ship-current-bullet ship)
+			     (make-bullet
+			      (let* ((bullet-ang (- angle 1.570796)))
+				(make-object-config
+				 (cons (car pos) (cdr pos))
+				 (cons (* BULLET-VEL (cos bullet-ang))
+				       (* BULLET-VEL (sin bullet-ang)))
+				 angle))
+			      (ship-current-bullet ship)
+			      0))
+			    (ship-current-bullet-set!
+			     ship
+			     (remainder
+			      (+ (ship-current-bullet ship) 1)
+			      (vector-length bullets)))))))
+		(ship-shoot-timer-set! ship (remainder
+					     (+ (ship-shoot-timer ship) 1)
+					     BULLET-SPAWN-TIME)))
+	      (ship-shoot-timer-set! ship 0))
+	  (if (key-pressed? keys CS-KEY-THRUST)
+	      (translate-point! vel (rotate-point THRUST-ACCEL angle)))
+	  (if (key-pressed? keys 1)
+	      (object-config-angle-set! shipc (- angle 0.05))
+	      (if (key-pressed? keys 2)
+		  (object-config-angle-set! shipc (+ angle 0.05))))))))
 
 ;; Generate an array of cells at random locations.
 
@@ -702,9 +743,9 @@
 	 (game-state (make-game-state
 		      (make-ship
 		       (make-object-config (cons 360 270) (cons 0 0) 0)
-		       0 0)
+		       0 0 #f INVINC-TIME)
 		      (make-vector 5 #f)
-		      (make-cells 50) (make-vector 50 #f) 0 0)))
+		      (make-cells 50) (make-vector 50 #f) 0)))
     (let loop ((t1 (time->seconds (current-time)))
 	       (t2 (time->seconds (current-time))))
       (let loop ((tdiff2 (+ tdiff (- t2 t1))))
