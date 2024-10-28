@@ -102,6 +102,63 @@
 			       (3 . 16)
 			       (6 . 20)))
 
+(define GAME-OVER
+  '((7
+     (230 . 250)
+     (210 . 250)
+     (210 . 290)
+     (230 . 290)
+     (230 . 270)
+     (220 . 270))
+    (7
+     (240 . 290)
+     (240 . 250)
+     (260 . 250)
+     (260 . 290))
+    (7
+     (240 . 270)
+     (260 . 270))
+    (7
+     (270 . 290)
+     (270 . 250)
+     (280 . 290)
+     (290 . 250)
+     (290 . 290))
+    (7
+     (320 . 250)
+     (300 . 250)
+     (300 . 290)
+     (320 . 290))
+    (7
+     (300 . 270)
+     (320 . 270))
+    (7
+     (390 . 250)
+     (390 . 290)
+     (410 . 290)
+     (410 . 250)
+     (390 . 250))
+    (7
+     (420 . 250)
+     (430 . 290)
+     (440 . 250))
+    (7
+     (470 . 250)
+     (450 . 250)
+     (450 . 290)
+     (470 . 290))
+    (7
+     (450 . 270)
+     (470 . 270))
+    (7
+     (480 . 270)
+     (500 . 270)
+     (500 . 250)
+     (480 . 250)
+     (480 . 290))
+    (7
+     (490 . 270)
+     (500 . 290))))
 (define SCORE-POS (cons 700 25))
 
 (define SCORE-DIGIT-WIDTH 15)
@@ -185,7 +242,7 @@
 
 (define-structure
   game-state
-  ship bullets cells aliens score)
+  ship bullets cells aliens score key-status)
 
 (define-structure
   ship
@@ -494,7 +551,8 @@
    (get-cell-sprites (game-state-cells state))
    (get-bullet-sprites (game-state-bullets state))
    (get-alien-sprites (game-state-aliens state))
-   (score-sprite (game-state-score state))))
+   (score-sprite (game-state-score state))
+   (if (ship-dead? (game-state-ship state)) GAME-OVER '())))
 
 (define (key-pressed? keys key)
   (not (zero? (bitwise-and keys key))))
@@ -671,9 +729,10 @@
 	     (translate-point! apos (object-config-vel conf))
 	     (object-config-vel-set! conf
 				     (rotate-point ALIEN-VEL (object-config-angle conf)))
-	     (object-config-angle-set! conf
-				       (atan (- (cdr pos) (cdr apos))
-					     (- (car pos) (car apos))))
+	     (if (not (ship-dead? ship))
+		 (object-config-angle-set! conf
+					   (atan (- (cdr pos) (cdr apos))
+						 (- (car pos) (car apos)))))
 	     (wrap-point! apos))))
      aliens)
     (if (not (ship-dead? ship))
@@ -718,7 +777,25 @@
 	  (if (key-pressed? keys 1)
 	      (object-config-angle-set! shipc (- angle 0.05))
 	      (if (key-pressed? keys 2)
-		  (object-config-angle-set! shipc (+ angle 0.05))))))))
+		  (object-config-angle-set! shipc (+ angle 0.05)))))
+	(begin
+	  (if (key-pressed? keys CS-KEY-FIRE)
+	      (if (not (zero? (game-state-key-status state)))
+		  (begin
+		    (game-state-ship-set!
+		     state
+		     (make-ship
+		      (make-object-config (cons 360 270) (cons 0 0) 0)
+		      0 0 #f INVINC-TIME))
+		    (game-state-bullets-set! state
+					     (make-vector 5 #f))
+		    (game-state-cells-set! state
+					   (make-cells 50))
+		    (game-state-aliens-set! state
+					    (make-vector 50 #f))
+		    (game-state-score-set! state 0)
+		    (game-state-key-status-set! state 0)))
+	      (game-state-key-status-set! state 1))))))
 
 ;; Generate an array of cells at random locations.
 
@@ -745,7 +822,7 @@
 		       (make-object-config (cons 360 270) (cons 0 0) 0)
 		       0 0 #f INVINC-TIME)
 		      (make-vector 5 #f)
-		      (make-cells 50) (make-vector 50 #f) 0)))
+		      (make-cells 50) (make-vector 50 #f) 0 0)))
     (let loop ((t1 (time->seconds (current-time)))
 	       (t2 (time->seconds (current-time))))
       (let loop ((tdiff2 (+ tdiff (- t2 t1))))
