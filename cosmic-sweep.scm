@@ -242,7 +242,7 @@
 
 (define-structure
   game-state
-  ship bullets cells aliens score key-status)
+  ship bullets cells aliens score cell-seek-factor key-status)
 
 (define-structure
   ship
@@ -641,71 +641,92 @@
     ;; Brownian motion is also applied to each cell so they wiggle
     ;; about.
 
-    (vector-for-each/index
-     (lambda (i c)
-       (if c
-	   (let* 
-	       ((conf (cell-config c))
-		(brownian-displacement (lambda () (* 0.25 (- (random-integer 3) 1)))))
-	     (translate-point!
-	      (object-config-pos conf)
-	      (object-config-vel conf))
-	     (translate-point!
-	      (object-config-pos conf)
-	      (cons
-	       (brownian-displacement)
-	       (brownian-displacement)))
-	     (wrap-point! (object-config-pos conf))
-	     (cell-throb-timer-set! c (+ (cell-throb-timer c) 1))
-	     (if (>= (cell-throb-timer c) CELL-THROB-TIME)
-		 (cell-throb-timer-set! c 0))
-	     ;; Check for collision between cell and a bullet. Delete
-	     ;; both if collision found.
-	     (bullet-check
-	      (lambda (j b)
-		(if (>
-		     (cell-cluster c)
-		     1)
-		    (cell-cluster-set! c (- (cell-cluster c) 1))
-		    (vector-set! cells i #f))
-		(vector-set! bullets j #f)
-		(game-state-score-set! state
-				       (+
-					(game-state-score state)
-					50)))
-	      bullets
-	      (cell-config c)
-	      10.0)
-	     ;; Check for cell-cell collision. Make cells stick together.
-	     (vector-for-each/index
-	      (lambda (j c2)
-		(if (and c2 (not (= j i)))
-		    (let* ((c-pos (object-config-pos conf))
-			   (c2-pos (object-config-pos (cell-config c2))))
-		      (if (collide? c2-pos c-pos 15.0)
-			  (begin
-			    (cell-cluster-set!
-			     c
-			     (+ (cell-cluster c)
-				(cell-cluster c2)))
-			    (if (> (cell-cluster c) 3)
-				(begin
-				  (vector-set! cells i #f)
-				  (vector-set! aliens i
-					       (make-alien
-						(cell-config c)))))
-			    (vector-set! cells j #f)))
-		      (if (collide? c2-pos c-pos 150.0)
-			  (begin
-			    (let* ((roll (random-integer 150)))
-			      (if (< roll (cell-cluster c2))
-				  (let* ((dx (- (car c2-pos) (car c-pos)))
-					 (dy (- (cdr c2-pos) (cdr c-pos)))
-					 (dist (sqrt (+ (* dx dx) (* dy dy)))))
-				    (if (> dist 0)
-					(translate-point! c-pos (cons (/ dx dist)  (/ dy dist))))))))))))
-	      cells))))
-     cells)
+    (let* ((dead-cell-count 0))
+      (vector-for-each/index
+       (lambda (i c)
+	 (if c
+	     (let* 
+		 ((conf (cell-config c))
+		  (brownian-displacement (lambda () (* 0.25 (- (random-integer 3) 1)))))
+	       (translate-point!
+		(object-config-pos conf)
+		(object-config-vel conf))
+	       (translate-point!
+		(object-config-pos conf)
+		(cons
+		 (brownian-displacement)
+		 (brownian-displacement)))
+	       (wrap-point! (object-config-pos conf))
+	       (cell-throb-timer-set! c (+ (cell-throb-timer c) 1))
+	       (if (>= (cell-throb-timer c) CELL-THROB-TIME)
+		   (cell-throb-timer-set! c 0))
+	       ;; Check for collision between cell and a bullet. Delete
+	       ;; both if collision found.
+	       (bullet-check
+		(lambda (j b)
+		  (if (>
+		       (cell-cluster c)
+		       1)
+		      (cell-cluster-set! c (- (cell-cluster c) 1))
+		      (vector-set! cells i #f))
+		  (vector-set! bullets j #f)
+		  (game-state-score-set! state
+					 (+
+					  (game-state-score state)
+					  50)))
+		bullets
+		(cell-config c)
+		10.0)
+	       ;; Check for cell-cell collision. Make cells stick together.
+	       (vector-for-each/index
+		(lambda (j c2)
+		  (if (and c2 (not (= j i)))
+		      (let* ((c-pos (object-config-pos conf))
+			     (c2-pos (object-config-pos (cell-config c2))))
+			(if (collide? c2-pos c-pos 15.0)
+			    (begin
+			      (cell-cluster-set!
+			       c
+			       (+ (cell-cluster c)
+				  (cell-cluster c2)))
+			      (if (> (cell-cluster c) 3)
+				  (begin
+				    (vector-set! cells i #f)
+				    (vector-set! aliens i
+						 (make-alien
+						  (cell-config c)))))
+			      (vector-set! cells j #f)))
+			(if (collide? c2-pos c-pos 150.0)
+			    (begin
+			      (let* ((roll (random-integer (game-state-cell-seek-factor state))))
+				(if (< roll (cell-cluster c2))
+				    (let* ((dx (- (car c2-pos) (car c-pos)))
+					   (dy (- (cdr c2-pos) (cdr c-pos)))
+					   (dist (sqrt (+ (* dx dx) (* dy dy)))))
+				      (if (> dist 0)
+					  (translate-point! c-pos (cons (/ dx dist)  (/ dy dist))))))))))))
+		cells))
+	     (begin
+	       (set! dead-cell-count (+ 1 dead-cell-count)))))
+       cells)
+      (if (> dead-cell-count 30)
+	  (begin
+	    (vector-for-each/index
+	     (lambda (i c)
+	       (if (not c)
+		   (vector-set!
+		    cells i
+		    (make-cell
+		     (make-object-config
+		      (cons
+		       (random-integer WINDOW-WIDTH)
+		       (random-integer WINDOW-HEIGHT))
+		      (cons 0 0)
+		      0)
+		     (random-integer CELL-THROB-TIME)
+		     1))))
+	     cells)
+	    (game-state-cell-seek-factor-set! state (- (game-state-cell-seek-factor state) 1)))))
     (vector-for-each/index
      (lambda (i a)
        (if a
@@ -822,7 +843,7 @@
 		       (make-object-config (cons 360 270) (cons 0 0) 0)
 		       0 0 #f INVINC-TIME)
 		      (make-vector 5 #f)
-		      (make-cells 50) (make-vector 50 #f) 0 0)))
+		      (make-cells 50) (make-vector 50 #f) 0 150 0)))
     (let loop ((t1 (time->seconds (current-time)))
 	       (t2 (time->seconds (current-time))))
       (let loop ((tdiff2 (+ tdiff (- t2 t1))))
