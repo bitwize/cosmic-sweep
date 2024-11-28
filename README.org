@@ -5,7 +5,7 @@
 
 This is Cosmic Sweep, a "Lisp game jam fail". Due to personal-life
 issues I could not get it submitted into the 2024 Spring Lisp Game
-Jam. Nevertheless, I decided to finish it. It's still a work in progress.
+Jam. Nevertheless, I decided to finish it.
 
 * Game Concept
 
@@ -17,12 +17,17 @@ and cluster together. When a cluster of four or more cells is formed,
 they form an aggressive alien that will chase you and destroy you if
 it collides with you.
 
+The game continues, constantly respawning cells as you clear them
+away, until you are caught by an alien.
+
 * How to Build
 
 Cosmic Sweep requires [[https://gambitscheme.org][Gambit]] v4.9.5 or later. Make sure Gambit is
 compiled and installed, perhaps through your operating system's
 package manager. X11 and Xlib libraries and headers are also a
 prerequisite.
+
+** Dynamic library (runnable from repl)
 
 Make sure the Gambit interpreter and compiler are in your ~PATH~, and
 then say:
@@ -35,8 +40,15 @@ Then, run the Gambit interpreter and tell it:
 : (init-window)
 : (main)
 
-There's a make target to build an executable (~make cosmic-sweep~) but
-it is not yet working.
+** Standalone executable
+Make sure the Gambit interpreter and compiler are in your ~PATH~, and
+then say:
+
+: make cosmic-sweep
+
+Then say:
+
+: ./cosmic-sweep
 
 * How To Play
 
